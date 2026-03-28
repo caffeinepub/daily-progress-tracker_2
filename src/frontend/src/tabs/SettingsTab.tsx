@@ -1,7 +1,13 @@
 import type React from "react";
-import { useState } from "react";
-import { type SubCategory, useStore } from "../store";
+import { useEffect, useRef, useState } from "react";
+import {
+  type AppState,
+  DEFAULT_STATE,
+  type SubCategory,
+  useStore,
+} from "../store";
 import { theme } from "../theme";
+import { clearStorage, getStorageUsageKB } from "../utils/storage";
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -24,7 +30,7 @@ function ToggleButton({
   onChange,
 }: {
   value: string;
-  options: { id: string; label: string }[];
+  options: { id: string; label: string | React.ReactNode }[];
   onChange: (v: string) => void;
 }) {
   return (
@@ -94,6 +100,16 @@ export function SettingsTab() {
   );
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [storageKB, setStorageKB] = useState<number>(0);
+  const [importStatus, setImportStatus] = useState<
+    "" | "success" | "error" | "importing"
+  >("");
+  const [areYouSure, setAreYouSure] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getStorageUsageKB(state).then(setStorageKB);
+  }, [state]);
 
   const updateSetting = (patch: Partial<typeof settings>) =>
     dispatch({ type: "UPDATE_SETTINGS", payload: patch });
@@ -139,6 +155,48 @@ export function SettingsTab() {
     updateSetting({ hiddenTabs: hidden });
   };
 
+  const exportData = () => {
+    const date = new Date().toISOString().split("T")[0];
+    const blob = new Blob([JSON.stringify(state, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dpt-backup-${date}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportStatus("importing");
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const parsed = JSON.parse(
+          ev.target?.result as string,
+        ) as Partial<AppState>;
+        if (!parsed.logs || !parsed.categories)
+          throw new Error("Invalid backup");
+        dispatch({ type: "LOAD_STATE", payload: parsed });
+        setImportStatus("success");
+      } catch {
+        setImportStatus("error");
+      }
+      setTimeout(() => setImportStatus(""), 3000);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    reader.readAsText(file);
+  };
+
+  const handleClearData = async () => {
+    await clearStorage();
+    dispatch({ type: "LOAD_STATE", payload: DEFAULT_STATE });
+    setAreYouSure(false);
+  };
+
   const productive = categories.filter((c) => c.parentId === "productive");
   const timeWaste = categories.filter((c) => c.parentId === "time-waste");
 
@@ -151,6 +209,18 @@ export function SettingsTab() {
     fontSize: theme.font.sm,
     outline: "none",
   };
+
+  const actionBtnStyle = (color: string): React.CSSProperties => ({
+    background: "none",
+    border: `1px solid ${color}`,
+    borderRadius: theme.radius.sm,
+    color: color,
+    padding: "7px 14px",
+    fontSize: theme.font.sm,
+    fontWeight: 600,
+    cursor: "pointer",
+    transition: `opacity ${theme.anim.fast} ease`,
+  });
 
   return (
     <div style={{ padding: theme.spacing.lg, paddingBottom: "100px" }}>
@@ -720,6 +790,248 @@ export function SettingsTab() {
             }
           />
         </Row>
+      </div>
+
+      {/* # Storage */}
+      <SectionHeader title="Storage" />
+      <div
+        style={{
+          background: theme.colors.surface,
+          borderRadius: theme.radius.lg,
+          padding: theme.spacing.md,
+          border: `1px solid ${theme.colors.border}`,
+        }}
+      >
+        {/* Storage Location */}
+        <Row>
+          <div>
+            <div style={{ fontWeight: 600, color: theme.colors.text }}>
+              Storage Location
+            </div>
+            <div
+              style={{
+                fontSize: theme.font.xs,
+                color: theme.colors.textDim,
+                marginTop: "2px",
+              }}
+            >
+              Where your data is saved
+            </div>
+          </div>
+          <ToggleButton
+            value={settings.storageMode ?? "local"}
+            options={[
+              { id: "local", label: "📱 Device" },
+              {
+                id: "cloud",
+                label: (
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    ☁️ Cloud
+                    <span
+                      style={{
+                        fontSize: "9px",
+                        fontWeight: 700,
+                        color: theme.colors.orange,
+                        background: `${theme.colors.orange}22`,
+                        border: `1px solid ${theme.colors.orange}55`,
+                        borderRadius: theme.radius.pill,
+                        padding: "1px 5px",
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Soon
+                    </span>
+                  </span>
+                ),
+              },
+            ]}
+            onChange={(v) =>
+              updateSetting({ storageMode: v as "local" | "cloud" })
+            }
+          />
+        </Row>
+
+        {/* Storage Usage */}
+        <Row>
+          <div>
+            <div style={{ fontWeight: 600, color: theme.colors.text }}>
+              Storage Used
+            </div>
+            <div
+              style={{
+                fontSize: theme.font.xs,
+                color: theme.colors.textDim,
+                marginTop: "2px",
+              }}
+            >
+              Approximate size of saved data
+            </div>
+          </div>
+          <div
+            style={{
+              fontWeight: 700,
+              fontSize: theme.font.md,
+              color: theme.colors.teal,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            ~{storageKB.toFixed(1)} KB
+          </div>
+        </Row>
+
+        {/* Export */}
+        <Row>
+          <div>
+            <div style={{ fontWeight: 600, color: theme.colors.text }}>
+              Export Backup
+            </div>
+            <div
+              style={{
+                fontSize: theme.font.xs,
+                color: theme.colors.textDim,
+                marginTop: "2px",
+              }}
+            >
+              Download all data as JSON
+            </div>
+          </div>
+          <button
+            type="button"
+            data-ocid="settings.secondary_button"
+            onClick={exportData}
+            style={actionBtnStyle(theme.colors.accent)}
+          >
+            ⬇ Export
+          </button>
+        </Row>
+
+        {/* Import */}
+        <Row>
+          <div>
+            <div style={{ fontWeight: 600, color: theme.colors.text }}>
+              Import Backup
+            </div>
+            <div
+              style={{
+                fontSize: theme.font.xs,
+                color: theme.colors.textDim,
+                marginTop: "2px",
+              }}
+            >
+              {importStatus === "importing" && (
+                <span style={{ color: theme.colors.textMuted }}>
+                  Importing…
+                </span>
+              )}
+              {importStatus === "success" && (
+                <span style={{ color: theme.colors.success }}>
+                  ✓ Import successful
+                </span>
+              )}
+              {importStatus === "error" && (
+                <span style={{ color: theme.colors.pink }}>
+                  ✗ Invalid backup file
+                </span>
+              )}
+              {importStatus === "" && "Restore from a .json backup"}
+            </div>
+          </div>
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              style={{ display: "none" }}
+              onChange={handleImport}
+            />
+            <button
+              type="button"
+              data-ocid="settings.upload_button"
+              onClick={() => fileInputRef.current?.click()}
+              style={actionBtnStyle(theme.colors.teal)}
+            >
+              ⬆ Import
+            </button>
+          </div>
+        </Row>
+
+        {/* Clear Data */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: `${theme.spacing.md} 0`,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 600, color: theme.colors.text }}>
+              Clear All Data
+            </div>
+            <div
+              style={{
+                fontSize: theme.font.xs,
+                color: theme.colors.textDim,
+                marginTop: "2px",
+              }}
+            >
+              Permanently delete all logs and settings
+            </div>
+          </div>
+          {!areYouSure ? (
+            <button
+              type="button"
+              data-ocid="settings.delete_button"
+              onClick={() => setAreYouSure(true)}
+              style={actionBtnStyle(theme.colors.pink)}
+            >
+              🗑 Clear
+            </button>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                gap: theme.spacing.sm,
+                alignItems: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: theme.font.xs,
+                  color: theme.colors.textMuted,
+                }}
+              >
+                Sure?
+              </span>
+              <button
+                type="button"
+                data-ocid="settings.confirm_button"
+                onClick={handleClearData}
+                style={{
+                  ...actionBtnStyle(theme.colors.pink),
+                  background: theme.colors.pink,
+                  color: "#fff",
+                }}
+              >
+                Yes, clear
+              </button>
+              <button
+                type="button"
+                data-ocid="settings.cancel_button"
+                onClick={() => setAreYouSure(false)}
+                style={actionBtnStyle(theme.colors.textMuted)}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer */}

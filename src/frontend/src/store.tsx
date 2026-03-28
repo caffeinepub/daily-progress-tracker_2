@@ -1,5 +1,12 @@
 import type React from "react";
-import { createContext, useContext, useEffect, useReducer } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useReducer,
+  useState,
+} from "react";
+import { loadState, saveState } from "./utils/storage";
 
 export interface LogEntry {
   id: string;
@@ -24,6 +31,7 @@ export interface AppSettings {
   fps: 30 | 60;
   tabOrder: string[];
   hiddenTabs: string[];
+  storageMode: "local" | "cloud";
 }
 
 export interface AppState {
@@ -38,7 +46,8 @@ type Action =
   | { type: "ADD_CATEGORY"; payload: SubCategory }
   | { type: "UPDATE_CATEGORY"; payload: SubCategory }
   | { type: "DELETE_CATEGORY"; payload: string }
-  | { type: "UPDATE_SETTINGS"; payload: Partial<AppSettings> };
+  | { type: "UPDATE_SETTINGS"; payload: Partial<AppSettings> }
+  | { type: "LOAD_STATE"; payload: Partial<AppState> };
 
 const DEFAULT_CATEGORIES: SubCategory[] = [
   {
@@ -85,7 +94,7 @@ const DEFAULT_CATEGORIES: SubCategory[] = [
   },
 ];
 
-const DEFAULT_STATE: AppState = {
+export const DEFAULT_STATE: AppState = {
   logs: [],
   categories: DEFAULT_CATEGORIES,
   settings: {
@@ -93,6 +102,7 @@ const DEFAULT_STATE: AppState = {
     fps: 30,
     tabOrder: ["home", "log", "graphs", "history", "settings"],
     hiddenTabs: [],
+    storageMode: "local",
   },
 };
 
@@ -121,6 +131,15 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case "UPDATE_SETTINGS":
       return { ...state, settings: { ...state.settings, ...action.payload } };
+    case "LOAD_STATE":
+      return {
+        ...DEFAULT_STATE,
+        ...action.payload,
+        settings: {
+          ...DEFAULT_STATE.settings,
+          ...(action.payload.settings ?? {}),
+        },
+      };
     default:
       return state;
   }
@@ -132,15 +151,24 @@ const StoreContext = createContext<{
 } | null>(null);
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const saved = localStorage.getItem("dpt_state");
-  const initial = saved
-    ? { ...DEFAULT_STATE, ...JSON.parse(saved) }
-    : DEFAULT_STATE;
-  const [state, dispatch] = useReducer(reducer, initial);
+  const [state, dispatch] = useReducer(reducer, DEFAULT_STATE);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    localStorage.setItem("dpt_state", JSON.stringify(state));
-  }, [state]);
+    loadState().then((saved) => {
+      if (saved) dispatch({ type: "LOAD_STATE", payload: saved });
+      setLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    saveState(state);
+  }, [state, loaded]);
+
+  if (!loaded) {
+    return null;
+  }
 
   return (
     <StoreContext.Provider value={{ state, dispatch }}>
