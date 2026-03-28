@@ -27,10 +27,21 @@ function AppInner() {
   const [displayTab, setDisplayTab] = useState<TabId>("home");
   const [opacity, setOpacity] = useState(1);
 
+  const fps = state.settings.fps ?? 60;
+
   useServiceWorker();
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-fps", String(fps));
+  }, [fps]);
 
   const handleTabChange = (tab: TabId) => {
     if (tab === activeTab) return;
+    if (fps === 30) {
+      setActiveTab(tab);
+      setDisplayTab(tab);
+      return;
+    }
     setOpacity(0);
     setTimeout(() => {
       setActiveTab(tab);
@@ -51,6 +62,7 @@ function AppInner() {
 
   return (
     <div
+      data-fps={fps}
       style={{
         background: theme.colors.bg,
         minHeight: "100dvh",
@@ -68,6 +80,7 @@ function AppInner() {
           layout="side"
           tabOrder={state.settings.tabOrder}
           hiddenTabs={state.settings.hiddenTabs}
+          fps={fps}
         />
       )}
       <div
@@ -75,7 +88,7 @@ function AppInner() {
           flex: 1,
           marginLeft: isSide ? "72px" : "0",
           opacity,
-          transition: `opacity ${theme.anim.normal} ease`,
+          transition: fps === 60 ? `opacity ${theme.anim.normal} ease` : "none",
           maxWidth: "600px",
           margin: isSide ? "0 auto 0 72px" : "0 auto",
           width: "100%",
@@ -95,6 +108,7 @@ function AppInner() {
           layout="bottom"
           tabOrder={state.settings.tabOrder}
           hiddenTabs={state.settings.hiddenTabs}
+          fps={fps}
         />
       )}
     </div>

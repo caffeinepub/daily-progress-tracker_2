@@ -101,4 +101,11 @@
     min-height: 100dvh;
     overflow-x: hidden;
   }
+
+  /* Battery Saver mode: disable all CSS transitions and animations */
+  [data-fps="30"] *,
+  html[data-fps="30"] * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
 }

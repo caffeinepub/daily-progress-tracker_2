@@ -16,6 +16,7 @@ interface Props {
   layout: "bottom" | "side";
   tabOrder: string[];
   hiddenTabs: string[];
+  fps: 30 | 60;
 }
 
 function HomeIcon() {
@@ -123,16 +124,20 @@ export function TabBar({
   layout,
   tabOrder,
   hiddenTabs,
+  fps,
 }: Props) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const noAnim = fps === 30;
 
   const orderedTabs = tabOrder
     .map((id) => ALL_TABS.find((t) => t.id === id))
     .filter((t): t is Tab => !!t && !hiddenTabs.includes(t.id));
 
   const getScale = (idx: number) => {
+    if (noAnim) return 1;
     if (hoveredIdx === null) return 1;
     const diff = Math.abs(idx - hoveredIdx);
     if (diff === 0) return 1.3;
@@ -240,7 +245,9 @@ export function TabBar({
                 cursor: "pointer",
                 color: isActive ? theme.colors.accent : theme.colors.textDim,
                 transform: `scale(${getScale(idx)})`,
-                transition: `transform ${theme.anim.fast} ease, color ${theme.anim.fast} ease`,
+                transition: noAnim
+                  ? "none"
+                  : `transform ${theme.anim.fast} ease, color ${theme.anim.fast} ease`,
                 padding: theme.spacing.sm,
                 borderRadius: theme.radius.md,
               }}
@@ -250,7 +257,9 @@ export function TabBar({
                 style={{
                   fontSize: theme.font.xs,
                   opacity: isActive || isHovered ? 1 : 0,
-                  transition: `opacity ${theme.anim.normal} ease`,
+                  transition: noAnim
+                    ? "none"
+                    : `opacity ${theme.anim.normal} ease`,
                   fontWeight: 600,
                 }}
               >
@@ -324,7 +333,9 @@ export function TabBar({
                 cursor: "pointer",
                 color: isActive ? theme.colors.accent : theme.colors.textDim,
                 transform: `scale(${getScale(idx)})`,
-                transition: `transform ${theme.anim.fast} cubic-bezier(0.34, 1.56, 0.64, 1), color ${theme.anim.fast} ease`,
+                transition: noAnim
+                  ? "none"
+                  : `transform ${theme.anim.fast} cubic-bezier(0.34, 1.56, 0.64, 1), color ${theme.anim.fast} ease`,
                 padding: "6px 12px",
                 borderRadius: theme.radius.md,
                 minWidth: "52px",
@@ -339,7 +350,9 @@ export function TabBar({
                   opacity: isActive || isHovered ? 1 : 0,
                   maxHeight: isActive || isHovered ? "16px" : "0px",
                   overflow: "hidden",
-                  transition: `opacity ${theme.anim.normal} ease, max-height ${theme.anim.normal} ease`,
+                  transition: noAnim
+                    ? "none"
+                    : `opacity ${theme.anim.normal} ease, max-height ${theme.anim.normal} ease`,
                   whiteSpace: "nowrap",
                 }}
               >
